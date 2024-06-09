@@ -14,6 +14,7 @@ int main()
     matrixMulWithCuda();
     runGraphs();
     runCooperativeGroups();
+    cudaImageConvolution();
     // cudaDeviceReset must be called before exiting in order for profiling and
     // tracing tools such as Nsight and Visual Profiler to show complete traces.
     cudaStatus = cudaDeviceReset();
