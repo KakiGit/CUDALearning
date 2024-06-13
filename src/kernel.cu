@@ -7,7 +7,7 @@
 
 int main()
 {
-   
+
     cudaError_t cudaStatus;
 
     addWithCuda();
