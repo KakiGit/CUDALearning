@@ -13,7 +13,7 @@
 #define IMAGE_WIDTH 28
 #define IMAGE_SIZE 28
 #define INPUT_SIZE IMAGE_SIZE * IMAGE_SIZE
-#define HIDDEN_SIZE 32
+#define HIDDEN_SIZE 16
 #define OUTPUT_SIZE 10
 #define LAYER_SIZES {INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE}
 #define NUM_LAYERS
@@ -418,8 +418,9 @@ void NeuralNetwork::stochasticGradientDescent(Data* trainData, Data* testData, i
 			train(batch, eta);
 			printf(".");
 		}
+		printf("\n");
 		evaluate(testData);
-		printf("\nEpoch %d done\n", epoch);
+		printf("Epoch %d done\n", epoch);
 	}
 }
 
@@ -490,7 +491,7 @@ std::pair<std::vector<Matrix*>, std::vector<Matrix*>> NeuralNetwork::backProb(DA
 	*nabla_w.back() = delta.dot(&activations[activations.size() - 2]->transpose());
 	for (int i = 2; i < m_shapes.size(); i++) {
 		Matrix sp = sigmoidPrime(preActivations[preActivations.size() - i]);
-		Matrix delta = m_weights[m_weights.size() - i + 1]->transpose().dot(nabla_b.back()) * sp;
+		Matrix delta = m_weights[m_weights.size() - i + 1]->transpose().dot(nabla_b[nabla_b.size() - i + 1]) * sp;
 		*nabla_b[nabla_b.size() - i] = delta;
 		*nabla_w[nabla_w.size() - i] = delta.dot(&activations[activations.size() - i - 1]->transpose());
 	}
@@ -596,7 +597,7 @@ cudaError_t cudaTrainNeuralNetwork() {
 		item.print();
 	}
 	std::pair<Data*, Data*> data = readData();
-	NeuralNetwork network(std::vector<int>({ INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE }));
+	NeuralNetwork network(std::vector<int>({ INPUT_SIZE, HIDDEN_SIZE, HIDDEN_SIZE, OUTPUT_SIZE }));
 	network.stochasticGradientDescent(data.first, data.second, 10, 30, 3.0);
 	delete data.first;
 	delete data.second;
