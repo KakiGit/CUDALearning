@@ -27,81 +27,98 @@
 #define TRAIN_IMG_PATH "resources/train-images-idx3-ubyte"
 #define TRAIN_LABEL_PATH "resources/train-labels-idx1-ubyte"
 
+int maxThreadsDimx, maxThreadsDimy, maxThreadsPerBlock;
 
 __global__ void cudaDot(
 	float* m1Values, float* m2Values, float* resValues,
 	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape) {
-	int idx = threadIdx.x;
-	int idy = threadIdx.y;
+	int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	int idy = threadIdx.y + blockIdx.y * blockDim.y;
 
-	resValues[idy * resShape->second + idx] = 0.0;
-	for (int i = 0; i < m1Shape->second; i++) {
-		resValues[idy * resShape->second + idx] += m1Values[idy * m1Shape->second + i] * m2Values[i * m2Shape->second + idx];
+	if (idx < resShape->second && idy < resShape->first) {
+		resValues[idy * resShape->second + idx] = 0.0;
+		for (int i = 0; i < m1Shape->second; i++) {
+			resValues[idy * resShape->second + idx] += m1Values[idy * m1Shape->second + i] * m2Values[i * m2Shape->second + idx];
+		}
 	}
 }
 
 __global__ void cudaMul(
 	float* m1Values, float* m2Values, float* resValues,
 	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape) {
-	int idx = threadIdx.x;
-	int idy = threadIdx.y;
+	int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	int idy = threadIdx.y + blockIdx.y * blockDim.y;
 
-	resValues[idy * resShape->second + idx] = m1Values[idy * resShape->second + idx] * m2Values[idy * resShape->second + idx];
+	if (idx < resShape->second && idy < resShape->first) {
+		resValues[idy * resShape->second + idx] = m1Values[idy * resShape->second + idx] * m2Values[idy * resShape->second + idx];
+	}
 }
 
 __global__ void cudaAdd(
 	float* m1Values, float* m2Values, float* resValues,
 	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape) {
-	int idx = threadIdx.x;
-	int idy = threadIdx.y;
+	int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	int idy = threadIdx.y + blockIdx.y * blockDim.y;
 
-	resValues[idy * resShape->second + idx] = m1Values[idy * resShape->second + idx] + m2Values[idy * resShape->second + idx];
-	printf("idx %d idy %d %.3f = %.3f + %.3f\n", idx, idy, resValues[idy * resShape->second + idx], m1Values[idy * resShape->second + idx], m2Values[idy * resShape->second + idx]);
+	if (idx < resShape->second && idy < resShape->first) {
+		resValues[idy * resShape->second + idx] = m1Values[idy * resShape->second + idx] + m2Values[idy * resShape->second + idx];
+	}
 }
 
 __global__ void cudaSub(
 	float* m1Values, float* m2Values, float* resValues,
 	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape) {
-	int idx = threadIdx.x;
-	int idy = threadIdx.y;
+	int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	int idy = threadIdx.y + blockIdx.y * blockDim.y;
 
-	resValues[idy * resShape->second + idx] = m1Values[idy * resShape->second + idx] - m2Values[idy * resShape->second + idx];
+	if (idx < resShape->second && idy < resShape->first) {
+		resValues[idy * resShape->second + idx] = m1Values[idy * resShape->second + idx] - m2Values[idy * resShape->second + idx];
+	}
 }
 
 __global__ void cudaEqual(
 	float* m1Values, float* m2Values, float* resValues,
 	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape) {
-	int idx = threadIdx.x;
-	int idy = threadIdx.y;
+	int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	int idy = threadIdx.y + blockIdx.y * blockDim.y;
 
-	resValues[idy * resShape->second + idx] = m1Values[idy * resShape->second + idx];
+	if (idx < resShape->second && idy < resShape->first) {
+		resValues[idy * resShape->second + idx] = m1Values[idy * resShape->second + idx];
+	}
 }
 
 // m2 not used
 __global__ void cudaTranspose(
 	float* m1Values, float* m2Values, float* resValues,
 	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape) {
-	int idx = threadIdx.x;
-	int idy = threadIdx.y;
-	resValues[idy * resShape->second + idx] = m1Values[idx * m1Shape->second + idy];
+	int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	int idy = threadIdx.y + blockIdx.y * blockDim.y;
+
+	if (idx < resShape->second && idy < resShape->first) {
+		resValues[idy * resShape->second + idx] = m1Values[idx * m1Shape->second + idy];
+	}
 }
 
 __global__ void cudaSigmoid(
 	float* m1Values, float* m2Values, float* resValues,
 	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape) {
-	int idx = threadIdx.x;
-	int idy = threadIdx.y;
+	int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	int idy = threadIdx.y + blockIdx.y * blockDim.y;
 
-	resValues[idy * resShape->second + idx] = sigmoid(m1Values[idy * resShape->second + idx]);
+	if (idx < resShape->second && idy < resShape->first) {
+		resValues[idy * resShape->second + idx] = sigmoid(m1Values[idy * resShape->second + idx]);
+	}
 }
 
 __global__ void cudaSigmoidPrime(
 	float* m1Values, float* m2Values, float* resValues,
 	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape) {
-	int idx = threadIdx.x;
-	int idy = threadIdx.y;
+	int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	int idy = threadIdx.y + blockIdx.y * blockDim.y;
 
-	resValues[idy * resShape->second + idx] = sigmoidPrime(m1Values[idy * m1Shape->second + idx]);
+	if (idx < resShape->second && idy < resShape->first) {
+		resValues[idy * resShape->second + idx] = sigmoidPrime(m1Values[idy * m1Shape->second + idx]);
+	}
 }
 
 Matrix::Matrix(float* values, _2DShape shape) : m_shape(shape) {
@@ -125,6 +142,31 @@ Matrix::~Matrix() {
 float* Matrix::getValues() { return m_values; }
 _2DShape Matrix::getShape() const { return m_shape; }
 
+std::pair<dim3, dim3> findOptimalDims(_2DShape shape) {
+	if (shape.first * shape.second <= maxThreadsPerBlock) {
+		return std::make_pair(dim3(shape.second, shape.first), dim3(1, 1));
+	}
+	int bestTx = 1, bestTy = 1;
+	int minBlocks = ceil(static_cast<float>(shape.second) / bestTy) * ceil(static_cast<float>(shape.first)/bestTx);
+	int bx, by;
+
+	for (int tx = 1; tx <= maxThreadsPerBlock; tx++) {
+		int ty = std::min(maxThreadsPerBlock, maxThreadsPerBlock/tx);
+		bx = ceil(static_cast<float>(shape.second) / tx);
+		by = ceil(static_cast<float>(shape.first) / ty);
+		int totalBlocks = bx * by;
+		if (totalBlocks < minBlocks) {
+			bestTx = tx;
+			bestTy = ty;
+			minBlocks = totalBlocks;
+		}
+	}
+	bx = ceil(static_cast<float>(shape.second) / bestTx);
+	by = ceil(static_cast<float>(shape.first) / bestTy);
+
+	return std::make_pair(dim3(bestTx, bestTy), dim3(bx, by));
+}
+
 Matrix Matrix::launchCudaMatrixCalculation(
 	const Matrix& m1, const Matrix& m2, _2DShape resShape,
 	void (*cudaFunc)(
@@ -133,8 +175,9 @@ Matrix Matrix::launchCudaMatrixCalculation(
 	Matrix res(resShape);
 	float* d_m1Values, * d_m2Values, * d_resValues;
 	_2DShape* d_m1Shape, * d_m2Shape, * d_resShape;
-	dim3 threadPerBlock(res.m_shape.second, res.m_shape.first);
-	int blocksPerGrid = 1;
+	auto dims = findOptimalDims(resShape);
+	dim3 threadPerBlock = dims.first;
+	dim3 blocksPerGrid = dims.second;
 	cudaMalloc((void**)&d_m1Values, m1.m_shape.first * m1.m_shape.second * sizeof(float));
 	cudaMalloc((void**)&d_m2Values, m2.m_shape.first * m2.m_shape.second * sizeof(float));
 	cudaMalloc((void**)&d_resValues, res.m_shape.first * res.m_shape.second * sizeof(float));
@@ -149,14 +192,18 @@ Matrix Matrix::launchCudaMatrixCalculation(
 	cudaFunc << <blocksPerGrid, threadPerBlock >> > (
 		d_m1Values, d_m2Values, d_resValues,
 		d_m1Shape, d_m2Shape, d_resShape);
-	cudaMemcpy(res.m_values, d_resValues, res.m_shape.first * res.m_shape.second * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaDeviceSynchronize();
+	cudaError_t err = cudaMemcpy(res.m_values, d_resValues, res.m_shape.first * res.m_shape.second * sizeof(float), cudaMemcpyDeviceToHost);
+	if (err != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy failed!");
+	}
 	cudaFree(d_m1Values);
 	cudaFree(d_m2Values);
 	cudaFree(d_resValues);
 	cudaFree(d_m1Shape);
 	cudaFree(d_m2Shape);
 	cudaFree(d_resShape);
-	return Matrix(res);
+	return res;
 }
 
 Matrix Matrix::dot(Matrix* m1, Matrix* m2) {
@@ -173,14 +220,21 @@ Matrix Matrix::transpose() {
 	return launchCudaMatrixCalculation(*this, _empty, _2DShape{ this->m_shape.second , this->m_shape.first }, cudaTranspose);
 }
 
+int Matrix::argMax() {
+	int mIdx = 0;
+	float mValue = 0;
+	for (int i = 0; i < m_shape.first * m_shape.second; i++) {
+		if (m_values[i] > mValue) {
+			mValue = m_values[i];
+			mIdx = i;
+		}
+	}
+	return mIdx;
+}
 
 Matrix Matrix::operator * (const Matrix& m) {
 	assert(this->m_shape.first == m.m_shape.first && this->m_shape.second == m.m_shape.second);
 	return launchCudaMatrixCalculation(*this, m, _2DShape{ this->m_shape.first , this->m_shape.second }, cudaMul);
-}
-
-Matrix operator * (const Matrix& m1, const Matrix& m2) {
-	return m1 * m2;
 }
 
 Matrix operator * (const float& scalar, const Matrix& m2) {
@@ -194,7 +248,6 @@ Matrix operator * (const float& scalar, const Matrix& m2) {
 
 Matrix Matrix::operator + (const Matrix& m) {
 	assert(this->m_shape.first == m.m_shape.first && this->m_shape.second == m.m_shape.second);
-	printf("%d * %d + %d * %d\n", this->getShape().first, this->getShape().second, m.getShape().first, m.getShape().second);
 	return launchCudaMatrixCalculation(*this, m, _2DShape{ this->m_shape.first , this->m_shape.second }, cudaAdd);
 }
 
@@ -235,6 +288,27 @@ Matrix& Matrix::operator = (const Matrix& m) {
 	m_shape = m.m_shape;
 	std::memcpy(m_values, m.m_values, size);
 	return *this;
+}
+
+bool Matrix::operator == (const Matrix& m) {
+	bool same = true;
+	same &= m.m_shape == this->m_shape;
+	for (int i = 0; i < m.m_shape.first * m.m_shape.second; i++) {
+		same &= this->m_values[i] == m.m_values[i];
+		if (!same) return same;
+	}
+	return same;
+}
+
+
+void Matrix::print() {
+	for (int i = 0; i < m_shape.first; i++) {
+		for (int j = 0; j < m_shape.second; j++) {
+			printf("%.3f\t", m_values[i * m_shape.second + j]);
+		}
+		printf("\n");
+	}
+	printf("-----\n");
 }
 
 Matrix sigmoid(Matrix* m1) {
@@ -306,16 +380,19 @@ int Data::getNumOfImages() { return m_numOfImages; }
 NeuralNetwork::NeuralNetwork(std::vector<int> shapes) : m_shapes(shapes) {
 	assert(m_shapes.size() >= 3);
 	printf("Creating network with %d layers\n", shapes.size());
+	std::random_device rd{};
+	std::mt19937 gen{ rd() };
+	std::normal_distribution<float> d;
 	auto v1 = std::vector<int>(m_shapes.begin(), m_shapes.end() - 1);
 	auto v2 = std::vector<int>(m_shapes.begin() + 1, m_shapes.end());
 	for (int i = 0; i < v1.size(); i++) {
 		float* weights = (float*)malloc(v2[i] * v1[i] * sizeof(float));
 		float* biases = (float*)malloc(v2[i] * sizeof(float));
 		for (int j = 0; j < v2[i] * v1[i]; j++) {
-			weights[j] = (float)rand() / RAND_MAX * 2 - 1;
+			weights[j] = d(gen);
 		}
 		for (int j = 0; j < v2[i]; j++) {
-			biases[j] = (float)rand() / RAND_MAX * 2 - 1;
+			biases[j] = d(gen);
 		}
 		m_weights.emplace_back(new Matrix(weights, _2DShape{ v2[i], v1[i] }));
 		m_biases.emplace_back(new Matrix(biases, _2DShape{ v2[i], 1 }));
@@ -337,13 +414,12 @@ void NeuralNetwork::stochasticGradientDescent(Data* trainData, Data* testData, i
 	int n = trainData->getNumOfImages();
 	for (int epoch = 0; epoch < epochs; epoch++) {
 		std::vector<Data*> batches = trainData->getBatches(batchSize);
-		int idx = 0;
 		for (auto batch : batches) {
 			train(batch, eta);
-			idx += 1;
+			printf(".");
 		}
 		evaluate(testData);
-		printf("Epoch %d done\n", epoch);
+		printf("\nEpoch %d done\n", epoch);
 	}
 }
 
@@ -390,12 +466,7 @@ void NeuralNetwork::evaluate(Data* data) {
 			Matrix z = m_weights[i]->dot(activations[i]) + *m_biases[i];
 			activations.emplace_back(new Matrix(sigmoid(&z)));
 		}
-		bool same = true;
-		_2DShape outputShape = item.second->getShape();
-		for (int i = 0; i < outputShape.first * outputShape.second; i++) {
-			same &= (static_cast<int>(activations.back()->getValues()[i]) == static_cast<int>(item.second->getValues()[i]));
-		}
-		if (same) correctCount += 1;
+		if (item.second->getValues()[activations.back()->argMax()] == 1.0) correctCount += 1;
 		auto deleteMatrix = [](auto item) { delete item; };
 		std::for_each(activations.begin(), activations.end(), deleteMatrix);
 		std::for_each(preActivations.begin(), preActivations.end(), deleteMatrix);
@@ -409,16 +480,17 @@ std::pair<std::vector<Matrix*>, std::vector<Matrix*>> NeuralNetwork::backProb(DA
 	std::for_each(m_weights.begin(), m_weights.end(), [&](Matrix* item) { nabla_w.emplace_back(new Matrix(item->getShape())); });
 	activations.emplace_back(new Matrix(*data.first));
 	for (int i = 0; i < m_weights.size(); i++) {
-		Matrix z = m_weights[i]->dot(activations[i]) + *m_biases[i];
+		Matrix wz = m_weights[i]->dot(activations[i]);
+		Matrix z = wz + *m_biases[i];
 		preActivations.emplace_back(new Matrix(z));
 		activations.emplace_back(new Matrix(sigmoid(preActivations[i])));
 	}
 	Matrix delta = (*activations.back() - *data.second) * sigmoidPrime(preActivations.back());
 	*nabla_b.back() = delta;
-	*nabla_w.back() = delta.dot(&activations[m_shapes.size() - 1 - 1]->transpose());
+	*nabla_w.back() = delta.dot(&activations[activations.size() - 2]->transpose());
 	for (int i = 2; i < m_shapes.size(); i++) {
 		Matrix sp = sigmoidPrime(preActivations[preActivations.size() - i]);
-		delta = m_weights[m_weights.size() - i + 1]->transpose().dot(&delta) * sp;
+		Matrix delta = m_weights[m_weights.size() - i + 1]->transpose().dot(nabla_b.back()) * sp;
 		*nabla_b[nabla_b.size() - i] = delta;
 		*nabla_w[nabla_w.size() - i] = delta.dot(&activations[activations.size() - i - 1]->transpose());
 	}
@@ -462,14 +534,14 @@ void readLabels(float* trainLabels, int offset, int num_labels, std::string path
 
 std::pair<Data*, Data*> readData() {
 	Data* trainData, * testData;
-	int numOfTrainImages = 1000;
-	int numOfTestImages = 1000;
+	int numOfTrainImages = 60000;
+	int numOfTestImages = 10000;
 	float* f_trainData = (float*)malloc(INPUT_SIZE * numOfTrainImages * sizeof(float));
 	float* f_trainLabel = (float*)malloc(OUTPUT_SIZE * numOfTrainImages * sizeof(float));
 	std::fill_n(f_trainLabel, OUTPUT_SIZE * numOfTrainImages, 0.0f);
 	float* f_testData = (float*)malloc(INPUT_SIZE * numOfTestImages * sizeof(float));
 	float* f_testLabel = (float*)malloc(OUTPUT_SIZE * numOfTestImages * sizeof(float));
-	std::fill_n(f_testLabel, OUTPUT_SIZE * numOfTrainImages, 0.0f);
+	std::fill_n(f_testLabel, OUTPUT_SIZE * numOfTestImages, 0.0f);
 	readImages(f_trainData, 0, numOfTrainImages, TRAIN_IMG_PATH);
 	readLabels(f_trainLabel, 0, numOfTrainImages, TRAIN_LABEL_PATH);
 	readImages(f_testData, 0, numOfTestImages, TEST_IMG_PATH);
@@ -482,22 +554,31 @@ std::pair<Data*, Data*> readData() {
 
 cudaError_t cudaTrainNeuralNetwork() {
 	printf("starting %s\n", __func__);
-	cudaDeviceProp prop;
-	cudaGetDeviceProperties(&prop, 0);
-	// 1024 1024 64 1024 1024
-	printf("%d %d %d %d %d\n", prop.maxThreadsDim[0], prop.maxThreadsDim[1], prop.maxThreadsDim[2], prop.maxThreadsPerBlock, prop.maxThreadsPerMultiProcessor);
+	// My GPU properties:
+	// maxThreadsDim.x 1024 maxThreadsDim.y 1024 maxThreadsDim.z 64
+	// maxThreadsPerBlock 1024 maxThreadsPerMultiProcessor 1024 maxBlocksPerMultiProcessor 16
+	// multiProcessorCount 34
+	// 34 * 16 * 1024 = 557056
+	 cudaDeviceProp prop;
+	 cudaGetDeviceProperties(&prop, 0);
+	printf("maxThreadsDim.x %d maxThreadsDim.y %d maxThreadsDim.z %d\n maxThreadsPerBlock %d maxThreadsPerMultiProcessor %d maxBlocksPerMultiProcessor %d multiProcessorCount %d\n",
+		prop.maxThreadsDim[0], prop.maxThreadsDim[1], prop.maxThreadsDim[2],
+		prop.maxThreadsPerBlock, prop.maxThreadsPerMultiProcessor,
+	    prop.maxBlocksPerMultiProcessor, prop.multiProcessorCount);
+	maxThreadsDimx = prop.maxThreadsDim[0];
+	maxThreadsDimy = prop.maxThreadsDim[1];
+	maxThreadsPerBlock = prop.maxThreadsPerBlock;
 	cudaError_t cudaStatus;
 
-	Matrix m1(_2DShape{ 3,3 }), m2(_2DShape{ 3,3 });
+	Matrix m1(_2DShape{ 4,3 }), m2(_2DShape{ 3,1 });
 	std::vector<float> v1(
-		{ 3,2,3,
-		  4,5,6,
-		  7,8,9});
+		{ 3, 2, 1,
+		  4, 8, 3,
+		  7, 6, 7,
+		  8, 9, 10});
 
 	std::vector<float> v2(
-		{ 2,1,3,
-		  8,2,4,
-		  9,3,5});
+		{ 2,1,3 });
 
 	for (auto i = 0; i < v1.size(); i++) {
 		m1.getValues()[i] = v1[i];
@@ -506,20 +587,13 @@ cudaError_t cudaTrainNeuralNetwork() {
 		m2.getValues()[i] = v2[i];
 	}
 	std::vector<Matrix> res;
-	res.emplace_back(m1.dot(&m2));
-	res.emplace_back(m1 * m2);
-	res.emplace_back(m1 + m2);
-	res.emplace_back(m1 - m2);
-	res.emplace_back(m1.transpose());
+	res.emplace_back(1.0 + m1.dot(&m2));
+	//res.emplace_back(m1 * m2);
+	//res.emplace_back(m1 + m2);
+	//res.emplace_back(m1 - m2);
+	//res.emplace_back(m1.transpose());
 	for (auto& item : res) {
-		auto resShape = item.getShape();
-		for (int i = 0; i < resShape.first; i++) {
-			for (int j = 0; j < resShape.second; j++) {
-				printf("%.3f\t", item.getValues()[i * resShape.second + j]);
-			}
-			printf("\n");
-		}
-		printf("-----\n");
+		item.print();
 	}
 	std::pair<Data*, Data*> data = readData();
 	NeuralNetwork network(std::vector<int>({ INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE }));

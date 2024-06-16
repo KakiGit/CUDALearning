@@ -22,10 +22,13 @@ public:
 	static Matrix dot(Matrix* m1, Matrix* m2);
 	Matrix dot(Matrix* m1);
 	Matrix transpose();
+	int argMax();
 	Matrix operator * (const Matrix& m);
 	Matrix operator + (const Matrix& m);
 	Matrix operator - (const Matrix& m);
 	Matrix& operator = (const Matrix& m);
+	bool operator == (const Matrix& m);
+	void print();
 
 private:
 	_2DShape m_shape;
@@ -71,3 +74,39 @@ private:
 __device__ float sigmoid(float x);
 
 __device__ float sigmoidPrime(float x);
+
+__global__ void cudaDot(
+	float* m1Values, float* m2Values, float* resValues,
+	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape);
+
+__global__ void cudaMul(
+	float* m1Values, float* m2Values, float* resValues,
+	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape);
+
+__global__ void cudaAdd(
+	float* m1Values, float* m2Values, float* resValues,
+	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape);
+
+__global__ void cudaSub(
+	float* m1Values, float* m2Values, float* resValues,
+	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape);
+
+__global__ void cudaEqual(
+	float* m1Values, float* m2Values, float* resValues,
+	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape);
+
+__global__ void cudaTranspose(
+	float* m1Values, float* m2Values, float* resValues,
+	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape);
+
+__global__ void cudaSigmoid(
+	float* m1Values, float* m2Values, float* resValues,
+	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape);
+
+__global__ void cudaSigmoidPrime(
+	float* m1Values, float* m2Values, float* resValues,
+	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape);
+
+Matrix sigmoid(Matrix* m1);
+Matrix sigmoidPrime(Matrix* m1);
+
