@@ -6,6 +6,8 @@
 #include <cassert>
 #include <neuralNetwork.h>
 #include <random>
+#include <string>
+#include <sstream>
 
 #define DEBUG false
 
@@ -246,10 +248,6 @@ Matrix Matrix::operator + (const Matrix& m) {
 	return launchCudaMatrixCalculation(*this, m, _2DShape{ this->m_shape.first , this->m_shape.second }, cudaAdd);
 }
 
-Matrix operator + (const Matrix& m1, const Matrix& m2) {
-	return m1 + m2;
-}
-
 Matrix operator + (const float& scalar, const Matrix& m2) {
 	_2DShape m2Shape = m2.getShape();
 	float* nums = (float*)malloc(m2Shape.first * m2Shape.second * sizeof(float));
@@ -262,10 +260,6 @@ Matrix operator + (const float& scalar, const Matrix& m2) {
 Matrix Matrix::operator - (const Matrix& m) {
 	assert(this->m_shape.first == m.m_shape.first && this->m_shape.second == m.m_shape.second);
 	return launchCudaMatrixCalculation(*this, m, _2DShape{ this->m_shape.first , this->m_shape.second }, cudaSub);
-}
-
-Matrix operator - (const Matrix& m1, const Matrix& m2) {
-	return m1 - m2;
 }
 
 Matrix operator - (const float& scalar, const Matrix& m2) {
@@ -285,16 +279,25 @@ Matrix& Matrix::operator = (const Matrix& m) {
 	return *this;
 }
 
-bool Matrix::operator == (const Matrix& m) {
+bool Matrix::isEqual(const Matrix& m) const {
 	bool same = true;
+	int size = m_shape.first * m_shape.second * sizeof(float);
+	float* src_values = (float*)malloc(size);
+	float* dst_values = (float*)malloc(size);
+	cudaMemcpy(src_values, m_values, size, cudaMemcpyDeviceToHost);
+	cudaMemcpy(dst_values, m.m_values, size, cudaMemcpyDeviceToHost);
 	same &= m.m_shape == this->m_shape;
 	for (int i = 0; i < m.m_shape.first * m.m_shape.second; i++) {
-		same &= this->m_values[i] == m.m_values[i];
-		if (!same) return same;
+		same &= src_values[i] == dst_values[i];
 	}
+	free(src_values);
+	free(dst_values);
 	return same;
 }
 
+bool operator == (const Matrix& m1, const Matrix& m2) {
+	return m1.isEqual(m2);
+}
 
 void Matrix::print() {
 	int size = m_shape.first * m_shape.second * sizeof(float);
@@ -308,6 +311,24 @@ void Matrix::print() {
 	}
 	printf("-----\n");
 	free(values);
+}
+
+std::string Matrix::toString() const {
+	std::ostringstream oss;
+	oss.precision(3);
+	int size = m_shape.first * m_shape.second * sizeof(float);
+	float* values = (float*)malloc(size);
+	cudaMemcpy(values, m_values, size, cudaMemcpyDeviceToHost);
+	oss << "\n";
+	for (int i = 0; i < m_shape.first; i++) {
+		for (int j = 0; j < m_shape.second; j++) {
+			oss << values[i * m_shape.second + j] << "\t";
+		}
+		oss << "\n";
+	}
+	oss;
+	free(values);
+	return oss.str();
 }
 
 Matrix sigmoid(Matrix* m1) {
@@ -577,26 +598,6 @@ cudaError_t cudaTrainNeuralNetwork() {
 	maxThreadsDimy = prop.maxThreadsDim[1];
 	maxThreadsPerBlock = prop.maxThreadsPerBlock;
 	cudaError_t cudaStatus;
-
-	float v1[12] =
-		{ 3, 2, 1,
-		  4, 8, 3,
-		  7, 6, 7,
-		  8, 9, 10 };
-
-	float v2[3] =
-		{ 2,1,3 };
-	Matrix m1(v1, _2DShape{ 4,3 }), m2(v2, _2DShape{ 3,1 });
-
-	std::vector<Matrix> res;
-	res.emplace_back(1.0 + m1.dot(&m2));
-	//res.emplace_back(m1 * m2);
-	//res.emplace_back(m1 + m2);
-	//res.emplace_back(m1 - m2);
-	//res.emplace_back(m1.transpose());
-	for (auto& item : res) {
-		item.print();
-	}
 
 	std::pair<Data*, Data*> data = readData();
 	NeuralNetwork network(std::vector<int>({ INPUT_SIZE, HIDDEN_SIZE, HIDDEN_SIZE, OUTPUT_SIZE }));

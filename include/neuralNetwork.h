@@ -27,20 +27,19 @@ public:
 	Matrix operator + (const Matrix& m);
 	Matrix operator - (const Matrix& m);
 	Matrix& operator = (const Matrix& m);
-	bool operator == (const Matrix& m);
+	bool isEqual (const Matrix& m) const;
 	void print();
+	std::string toString() const;
 
 private:
 	_2DShape m_shape;
 	float* m_values;
 };
 
-Matrix operator * (const Matrix& m1, const Matrix& m2);
 Matrix operator * (const float& scalar, const Matrix& m2);
-Matrix operator + (const Matrix& m1, const Matrix& m2);
 Matrix operator + (const float& scalar, const Matrix& m2);
-Matrix operator - (const Matrix& m1, const Matrix& m2);
 Matrix operator + (const float& scalar, const Matrix& m2);
+bool operator == (const Matrix& m1, const Matrix& m2);
 
 class Data {
 public:
