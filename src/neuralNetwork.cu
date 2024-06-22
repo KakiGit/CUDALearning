@@ -22,7 +22,8 @@
 
 #define LEARNING_RATE 3
 #define EPOCHS 20
-#define NUM_OF_SAMPLES 100
+#define NUM_OF_TRAIN_IMAGES 60000
+#define NUM_OF_TEST_IMAGES 10000
 
 #define TEST_IMG_PATH "resources/t10k-images-idx3-ubyte"
 #define TEST_LABEL_PATH "resources/t10k-labels-idx1-ubyte"
@@ -34,14 +35,14 @@ int maxThreadsDimx, maxThreadsDimy, maxThreadsPerBlock;
 __global__ void cudaDot(
 	float* m1Values, float* m2Values, float* resValues,
 	_2DShape* m1Shape, _2DShape* m2Shape, _2DShape* resShape) {
-	int idx = threadIdx.x + blockIdx.x * blockDim.x;
-	int idy = threadIdx.y + blockIdx.y * blockDim.y;
-
-	if (idx < resShape->second && idy < resShape->first) {
-		resValues[idy * resShape->second + idx] = 0.0;
-		for (int i = 0; i < m1Shape->second; i++) {
-			resValues[idy * resShape->second + idx] += m1Values[idy * m1Shape->second + i] * m2Values[i * m2Shape->second + idx];
-		}
+	int bIdx = blockIdx.x, bIdy = blockIdx.y,
+		tIdx = threadIdx.x, tIdy = threadIdx.y,
+	    idx = tIdx + bIdx * blockDim.x,
+	    idy = tIdy + bIdy * blockDim.y;
+	if (tIdx == 0 && tIdy == 0) resValues[bIdy * resShape->second + bIdx] = 0.0f;
+	__syncthreads();
+	if (tIdx < m1Shape->second) {
+		atomicAdd(&resValues[bIdy * resShape->second + bIdx], m1Values[bIdy * m1Shape->second + tIdx] * m2Values[tIdx * m2Shape->second + bIdx]);
 	}
 }
 
@@ -124,29 +125,40 @@ __global__ void cudaSigmoidPrime(
 }
 
 Matrix::Matrix(float* values, _2DShape shape) : m_shape(shape) {
-	int size = m_shape.first * m_shape.second * sizeof(float);
+	int size = shape.first * shape.second * sizeof(float);
 	cudaMalloc((void**)&m_values, size);
 	cudaMemcpy(m_values, values, size, cudaMemcpyHostToDevice);
+
+	cudaMalloc((void**)&m_d_shape, sizeof(_2DShape));
+	cudaMemcpy(m_d_shape, &shape, sizeof(_2DShape), cudaMemcpyHostToDevice);
 }
 Matrix::Matrix(const Matrix& rhs) : m_shape(rhs.m_shape) {
+	cudaMalloc(&m_d_shape, sizeof(_2DShape));
+	cudaMemcpy(m_d_shape, rhs.m_d_shape, sizeof(_2DShape), cudaMemcpyDeviceToDevice);
+
 	int size = m_shape.first * m_shape.second * sizeof(float);
 	cudaMalloc((void**)&m_values, size);
 	cudaMemcpy(m_values, rhs.m_values, size, cudaMemcpyDeviceToDevice);
 }
 Matrix::Matrix(_2DShape shape) : m_shape(shape) {
-	int size = m_shape.first * m_shape.second * sizeof(float);
+	int size = shape.first * shape.second * sizeof(float);
 	cudaMalloc((void**)&m_values, size);
 	float* zeros = (float*)malloc(size);
-	std::fill_n(zeros, m_shape.first * m_shape.second, 0.0f);
+	std::fill_n(zeros, shape.first * shape.second, 0.0f);
 	cudaMemcpy(m_values, zeros, size, cudaMemcpyHostToDevice);
 	free(zeros);
+	cudaMalloc(&m_d_shape, sizeof(_2DShape));
+	cudaMemcpy(m_d_shape, &shape, sizeof(_2DShape), cudaMemcpyHostToDevice);
 }
 
 Matrix::~Matrix() {
 	cudaFree(m_values);
+	cudaFree(m_d_shape);
 }
 float* Matrix::getValues() { return m_values; }
-_2DShape Matrix::getShape() const { return m_shape; }
+_2DShape Matrix::getShape() const {
+	return m_shape;
+}
 
 std::pair<dim3, dim3> findOptimalDims(_2DShape shape) {
 	if (shape.first * shape.second <= maxThreadsPerBlock) {
@@ -174,35 +186,24 @@ std::pair<dim3, dim3> findOptimalDims(_2DShape shape) {
 }
 
 Matrix Matrix::launchCudaMatrixCalculation(
-	const Matrix& m1, const Matrix& m2, _2DShape resShape,
+	const Matrix& m1, const Matrix& m2, _2DShape resShape, std::pair<dim3, dim3> dims,
 	void (*cudaFunc)(
 		float*, float*, float*,
 		_2DShape*, _2DShape*, _2DShape*)) {
 
-	_2DShape* d_m1Shape, * d_m2Shape, * d_resShape;
 	Matrix res(resShape);
-
-	auto dims = findOptimalDims(resShape);
 	dim3 threadPerBlock = dims.first;
 	dim3 blocksPerGrid = dims.second;
-	cudaMalloc(&d_m1Shape, sizeof(_2DShape));
-	cudaMalloc(&d_m2Shape, sizeof(_2DShape));
-	cudaMalloc(&d_resShape, sizeof(_2DShape));
-	cudaMemcpy(d_m1Shape, &m1.m_shape, sizeof(_2DShape), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_m2Shape, &m2.m_shape, sizeof(_2DShape), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_resShape, &res.m_shape, sizeof(_2DShape), cudaMemcpyHostToDevice);
 	cudaFunc << <blocksPerGrid, threadPerBlock >> > (
 		m1.m_values, m2.m_values, res.m_values,
-		d_m1Shape, d_m2Shape, d_resShape);
-	cudaFree(d_m1Shape);
-	cudaFree(d_m2Shape);
-	cudaFree(d_resShape);
+		m1.m_d_shape, m2.m_d_shape, res.m_d_shape);
 	return res;
 }
 
 Matrix Matrix::dot(Matrix* m1, Matrix* m2) {
 	assert(m1->m_shape.second == m2->m_shape.first);
-	return launchCudaMatrixCalculation(*m1, *m2, _2DShape{ m1->m_shape.first , m2->m_shape.second }, cudaDot);
+	auto dims = std::make_pair(dim3(std::min(1024, m1->m_shape.second), 1), dim3(m2->m_shape.second, m1->m_shape.first));
+	return launchCudaMatrixCalculation(*m1, *m2, _2DShape{ m1->m_shape.first , m2->m_shape.second }, dims, cudaDot);
 }
 
 Matrix Matrix::dot(Matrix* m) {
@@ -211,7 +212,7 @@ Matrix Matrix::dot(Matrix* m) {
 
 Matrix Matrix::transpose() {
 	Matrix _empty(_2DShape{ 0,0 });
-	return launchCudaMatrixCalculation(*this, _empty, _2DShape{ this->m_shape.second , this->m_shape.first }, cudaTranspose);
+	return launchCudaMatrixCalculation(*this, _empty, _2DShape{ this->m_shape.second , this->m_shape.first }, findOptimalDims(_2DShape{ this->m_shape.second , this->m_shape.first }), cudaTranspose);
 }
 
 int Matrix::argMax() {
@@ -231,7 +232,7 @@ int Matrix::argMax() {
 
 Matrix Matrix::operator * (const Matrix& m) {
 	assert(this->m_shape.first == m.m_shape.first && this->m_shape.second == m.m_shape.second);
-	return launchCudaMatrixCalculation(*this, m, _2DShape{ this->m_shape.first , this->m_shape.second }, cudaMul);
+	return launchCudaMatrixCalculation(*this, m, _2DShape{ this->m_shape.first , this->m_shape.second }, findOptimalDims(_2DShape{ this->m_shape.first , this->m_shape.second }), cudaMul);
 }
 
 Matrix operator * (const float& scalar, const Matrix& m2) {
@@ -245,7 +246,7 @@ Matrix operator * (const float& scalar, const Matrix& m2) {
 
 Matrix Matrix::operator + (const Matrix& m) {
 	assert(this->m_shape.first == m.m_shape.first && this->m_shape.second == m.m_shape.second);
-	return launchCudaMatrixCalculation(*this, m, _2DShape{ this->m_shape.first , this->m_shape.second }, cudaAdd);
+	return launchCudaMatrixCalculation(*this, m, _2DShape{ this->m_shape.first , this->m_shape.second }, findOptimalDims(_2DShape{ this->m_shape.first , this->m_shape.second }), cudaAdd);
 }
 
 Matrix operator + (const float& scalar, const Matrix& m2) {
@@ -259,7 +260,7 @@ Matrix operator + (const float& scalar, const Matrix& m2) {
 
 Matrix Matrix::operator - (const Matrix& m) {
 	assert(this->m_shape.first == m.m_shape.first && this->m_shape.second == m.m_shape.second);
-	return launchCudaMatrixCalculation(*this, m, _2DShape{ this->m_shape.first , this->m_shape.second }, cudaSub);
+	return launchCudaMatrixCalculation(*this, m, _2DShape{ this->m_shape.first , this->m_shape.second }, findOptimalDims(_2DShape{ this->m_shape.first , this->m_shape.second }), cudaSub);
 }
 
 Matrix operator - (const float& scalar, const Matrix& m2) {
@@ -275,7 +276,8 @@ Matrix operator - (const float& scalar, const Matrix& m2) {
 Matrix& Matrix::operator = (const Matrix& m) {
 	int size = m_shape.first * m_shape.second * sizeof(float);
 	m_shape = m.m_shape;
-    cudaMemcpy(m_values, m.m_values, size, cudaMemcpyDeviceToDevice);
+	cudaMemcpy(m_values, m.m_values, size, cudaMemcpyDeviceToDevice);
+	cudaMemcpy(m_d_shape, m.m_d_shape, sizeof(_2DShape), cudaMemcpyDeviceToDevice);
 	return *this;
 }
 
@@ -333,12 +335,12 @@ std::string Matrix::toString() const {
 
 Matrix sigmoid(Matrix* m1) {
 	Matrix _empty(_2DShape{ 0,0 });
-	return Matrix::launchCudaMatrixCalculation(*m1, _empty, _2DShape{ m1->getShape().first , m1->getShape().second }, cudaSigmoid);
+	return Matrix::launchCudaMatrixCalculation(*m1, _empty, _2DShape{ m1->getShape().first , m1->getShape().second }, findOptimalDims(_2DShape{ m1->getShape().first , m1->getShape().second }), cudaSigmoid);
 }
 
 Matrix sigmoidPrime(Matrix* m1) {
 	Matrix _empty(_2DShape{ 0,0 });
-	return Matrix::launchCudaMatrixCalculation(*m1, _empty, _2DShape{ m1->getShape().first , m1->getShape().second }, cudaSigmoidPrime);
+	return Matrix::launchCudaMatrixCalculation(*m1, _empty, _2DShape{ m1->getShape().first , m1->getShape().second }, findOptimalDims(_2DShape{ m1->getShape().first , m1->getShape().second }), cudaSigmoidPrime);
 }
 
 Data::Data(
@@ -558,8 +560,8 @@ void readLabels(float* trainLabels, int offset, int num_labels, std::string path
 
 std::pair<Data*, Data*> readData() {
 	Data* trainData, * testData;
-	int numOfTrainImages = 60000;
-	int numOfTestImages = 10000;
+	int numOfTrainImages = NUM_OF_TRAIN_IMAGES;
+	int numOfTestImages = NUM_OF_TEST_IMAGES;
 	float* f_trainData = (float*)malloc(INPUT_SIZE * numOfTrainImages * sizeof(float));
 	float* f_trainLabel = (float*)malloc(OUTPUT_SIZE * numOfTrainImages * sizeof(float));
 	std::fill_n(f_trainLabel, OUTPUT_SIZE * numOfTrainImages, 0.0f);

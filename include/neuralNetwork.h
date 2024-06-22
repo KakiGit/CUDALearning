@@ -15,7 +15,7 @@ public:
 	float* getValues();
 	_2DShape getShape() const;
 	static Matrix launchCudaMatrixCalculation(
-		const Matrix& m1,const Matrix& m2, _2DShape resShape,
+		const Matrix& m1,const Matrix& m2, _2DShape resShape, std::pair<dim3, dim3> dims,
 		void (*cudaFunc)(
 			float*, float*, float*,
 			_2DShape*, _2DShape*, _2DShape*));
@@ -32,8 +32,9 @@ public:
 	std::string toString() const;
 
 private:
-	_2DShape m_shape;
+	_2DShape m_shape, * m_d_shape;
 	float* m_values;
+
 };
 
 Matrix operator * (const float& scalar, const Matrix& m2);
